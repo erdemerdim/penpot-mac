@@ -103,6 +103,22 @@ Sistem/update.sh --check | --yes | <sürüm> ; Sistem/rollback.sh
 Sistem/tools/depo-guncelle.sh             # git pull + gerekirse kurulum.sh --guncelle / build-all
 ```
 
+### DMG kurulum penceresi
+
+DMG açılınca görünen "Uygulamalar'a sürükle" penceresi `dmgbuild` ile yazılır (Finder otomasyonu
+gerekmez, tekrarlanabilir). Dosyalar `Sistem/tools/app/dmg/`:
+- `dmgbuild-ayarlari.py`: pencere 660×420, çubuklar gizli, simge 128 px, Penpot (165,190) ve
+  `Uygulamalar` → `/Applications` (495,190), disk simgesi `Penpot.icns`, disk adı "Penpot <APP_VERSION>".
+- `arkaplan.swift`: arka plan görseli (1x + 2x → `tiffutil` ile birleşik TIFF). Açık zemin, sol üstte
+  yatay Penpot logosu (`penpot-logo.svg`, Penpot'un kendi dosyası), simgeler arasında düz ok, altta
+  yönlendirme yazısı. **Zemin bilerek açık:** Finder, resimli arka planda simge altı yazılarını hep
+  koyu yazar ve rengi ayarlanamaz (icvp arka plan rengi de denendi, işe yaramadı); koyu zeminde okunmuyordu.
+- `yuvarlak-ikon.swift`: `Penpot.icns` bununla macOS biçimine (824/1024 yuvarlatılmış kare, gölge) getirildi.
+- `dmgbuild` kurulumu (yalnızca DMG üreten Mac'te, depoya girmez):
+  `python3 -I -m venv .venv-dmg && .venv-dmg/bin/pip install "dmgbuild>=1.6.5,<2"`
+  (sistem Python'u 3.9; dmgbuild 2.x Python 3.11 ister). Yoksa `dmg-olustur.sh` düz DMG üretir.
+- Kontrol: DMG'yi `open` ile açıp pencereye bakın; `.DS_Store` ayarları `ds_store` ile okunabilir.
+
 ### Yeni DMG ve Release yayınlama
 
 1. `Sistem/surumler.env` içinde `APP_VERSION`'ı artırın (ör. `1.0.0` → `1.0.1`; Penpot sürümü
@@ -118,7 +134,7 @@ Sistem/tools/depo-guncelle.sh             # git pull + gerekirse kurulum.sh --gu
 4. Kullanıcı onayıyla:
    `~/.local/bin/gh release create v<APP_VERSION> dist/Penpot-<APP_VERSION>.dmg --title "Penpot <APP_VERSION> (Penpot <PENPOT_VERSION>)" --notes-file notlar.md --latest`
    Notların ilk ~500 karakteri uygulamadaki güncelleme penceresinde görünür; kısa ve kullanıcıya
-   yönelik yazın. Dosya başına 2 GB sınırı var (DMG ~590 MB).
+   yönelik yazın. Dosya başına 2 GB sınırı var (DMG ~480 MB).
 5. `gh` bu Mac'te `~/.local/bin/gh` (PATH'te değil). Güncelleme denetimi kimlik doğrulamasız
    GitHub API kullanır: **depo açık olmalı**, gizli depoda bildirim çalışmaz.
 

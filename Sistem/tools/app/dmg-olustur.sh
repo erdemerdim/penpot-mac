@@ -86,10 +86,21 @@ codesign --verify "$WORK/Penpot.app" && echo "İmza geçerli."
 du -sh "$WORK/Penpot.app"
 
 say "DMG oluşturuluyor"
-mkdir -p "$WORK/dmg" "$OUTDIR"
-mv "$WORK/Penpot.app" "$WORK/dmg/Penpot.app"
-ln -s /Applications "$WORK/dmg/Uygulamalar"
-rm -f "$DMG"
-hdiutil create -volname "Penpot" -srcfolder "$WORK/dmg" -fs APFS -format ULMO -ov "$DMG" >/dev/null
+mkdir -p "$OUTDIR"; rm -f "$DMG"
+# Kurulum penceresi (arka plan, ok, simge konumları, gizli çubuklar): dmgbuild ile.
+# dmgbuild yoksa düz DMG üretilir. Kurulumu: GELISTIRICI.md / CLAUDE.md ("DMG penceresi").
+DMGBUILD="${DMGBUILD:-$ROOT/.venv-dmg/bin/dmgbuild}"
+if [ -x "$DMGBUILD" ]; then
+  swift "$HERE/dmg/arkaplan.swift" "$WORK/bg.png" 1
+  swift "$HERE/dmg/arkaplan.swift" "$WORK/bg@2x.png" 2
+  tiffutil -cathidpicheck "$WORK/bg.png" "$WORK/bg@2x.png" -out "$WORK/background.tiff" >/dev/null
+  "$DMGBUILD" -s "$HERE/dmg/dmgbuild-ayarlari.py" -D app="$WORK/Penpot.app" \
+    -D background="$WORK/background.tiff" -D icon="$HERE/Penpot.icns" "Penpot $APP_VERSION" "$DMG" >/dev/null
+else
+  echo "Uyarı: dmgbuild bulunamadı ($DMGBUILD); kurulum penceresi düzenlenmemiş düz DMG üretiliyor." >&2
+  mkdir -p "$WORK/dmg"; mv "$WORK/Penpot.app" "$WORK/dmg/Penpot.app"
+  ln -s /Applications "$WORK/dmg/Uygulamalar"
+  hdiutil create -volname "Penpot $APP_VERSION" -srcfolder "$WORK/dmg" -fs APFS -format ULMO -ov "$DMG" >/dev/null
+fi
 ls -lh "$DMG" | awk '{print $5, $NF}'
 shasum -a 256 "$DMG"

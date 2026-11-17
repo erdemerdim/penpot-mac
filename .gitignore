@@ -35,3 +35,6 @@
 
 # DMG çıktıları (Sistem/tools/app/dmg-olustur.sh)
 /dist/
+
+# DMG penceresi aracı (dmgbuild) için yerel Python ortamı
+/.venv-dmg/

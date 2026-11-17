@@ -15,6 +15,9 @@ Kaynak betiklerden kurulmuş bir Mac'te (aşağıdaki kurulum):
 Paketlenen uygulama verilerini `~/Library/Application Support/Penpot` altında tutar
 (`Sistem/tools/app/hazirla.sh`). DMG'yi GitHub Releases'e yükleyin (dosya başına 2 GB sınırı).
 
+Kurulum penceresi (arka plan, ok, simge konumları) için `dmgbuild` gerekir; kurulumu ve
+ayrıntılar `CLAUDE.md` → "DMG kurulum penceresi".
+
 ## Kaynak betiklerden kurulum
 
 1. **Terminal**'i açın (Uygulamalar → İzlenceler → Terminal).
