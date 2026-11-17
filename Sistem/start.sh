@@ -15,16 +15,40 @@ for i in $(seq 1 60); do
   sleep 1
 done
 
-# İlk kurulumda veritabanını hazırla
+# Başka bir Penpot (ya da aynı bağlantı noktalarını kullanan bir program) açıksa beklemeden anlaşılır
+# bir hata ver. Penpot.app bu dosyayı görünce mesajı pencerede gösterir.
+ERRF="$L/logs/baslatma-hatasi.txt"; mkdir -p "$L/logs"; rm -f "$ERRF"
+busy() { /usr/sbin/lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+conflict=""
+{ [ -d "$L/data/pg" ] && pg_ctl -D "$L/data/pg" status >/dev/null 2>&1; } || ! busy 5432 || conflict="$conflict 5432"
+{ [ -f "$L/data/valkey.pid" ] && kill -0 "$(cat "$L/data/valkey.pid")" 2>/dev/null; } || ! busy 6379 || conflict="$conflict 6379"
+pgrep -f "java .*$LRE/patches/macos-tmp\\.clj.*app\\.main" >/dev/null || ! busy 6060 || conflict="$conflict 6060"
+pgrep -f "node $LRE/proxy\\.mjs" >/dev/null || ! busy 9001 || conflict="$conflict 9001"
+if [ -n "$conflict" ]; then
+  echo "Başka bir Penpot açık görünüyor (kullanılan bağlantı noktaları:$conflict). Önce onu kapatın, sonra bu Penpot'u yeniden açın." | tee "$ERRF" >&2
+  exit 3
+fi
+
+# Veritabanı: ilk kurulumda oluşturulur. Kullanıcı ve veritabanı ayrıca denetlenir, çünkü ilk
+# kurulum yarıda kalırsa (uygulama erken kapatılırsa) klasör var ama "penpot" kullanıcısı yok olabilir.
+# Denetim tamamlanınca data/pg/.penpot-hazir yazılır; sonraki açılışlar beklemeden başlar.
+PGOPTS="-p 5432 -k /tmp -h 127.0.0.1"
 if [ ! -d "$L/data/pg" ]; then
   initdb -D "$L/data/pg" -U postgres --auth=trust -E UTF8 --locale=C >/dev/null
-  pg_ctl -D "$L/data/pg" -l "$L/logs/postgres.log" -o "-p 5432 -k /tmp -h 127.0.0.1" -w start >/dev/null
-  psql -h 127.0.0.1 -U postgres -c "CREATE USER penpot WITH PASSWORD '${PENPOT_DATABASE_PASSWORD:-penpot}';" >/dev/null
-  psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE penpot OWNER penpot;" >/dev/null
+fi
+if [ ! -f "$L/data/pg/.penpot-hazir" ]; then
+  pg_ctl -D "$L/data/pg" status >/dev/null 2>&1 || pg_ctl -D "$L/data/pg" -l "$L/logs/postgres.log" -o "$PGOPTS" -w start >/dev/null
+  if [ "$(psql -h 127.0.0.1 -U postgres -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='penpot'")" != 1 ]; then
+    psql -h 127.0.0.1 -U postgres -d postgres -c "CREATE USER penpot WITH PASSWORD '${PENPOT_DATABASE_PASSWORD:-penpot}';" >/dev/null
+  fi
+  if [ "$(psql -h 127.0.0.1 -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='penpot'")" != 1 ]; then
+    psql -h 127.0.0.1 -U postgres -d postgres -c "CREATE DATABASE penpot OWNER penpot;" >/dev/null
+  fi
+  touch "$L/data/pg/.penpot-hazir"
 else
   # Beklemeden başlat (-W): Java sunucusu açılırken veritabanı da paralel açılır; sunucu
   # veritabanına ilk ~5 sn'de ihtiyaç duymaz, gerekirse bağlanana kadar kendisi bekler.
-  pg_ctl -D "$L/data/pg" status >/dev/null 2>&1 || pg_ctl -D "$L/data/pg" -l "$L/logs/postgres.log" -o "-p 5432 -k /tmp -h 127.0.0.1" -W start >/dev/null
+  pg_ctl -D "$L/data/pg" status >/dev/null 2>&1 || pg_ctl -D "$L/data/pg" -l "$L/logs/postgres.log" -o "$PGOPTS" -W start >/dev/null
 fi
 echo "PostgreSQL başlatıldı"
 

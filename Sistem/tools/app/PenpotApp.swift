@@ -61,6 +61,12 @@ func stopInProgress() -> Bool {
     return false
 }
 
+// start.sh başlatamazsa (ör. başka bir Penpot açık) nedenini bu dosyaya yazar
+let startErrorURL = systemFolder.appendingPathComponent("logs/baslatma-hatasi.txt")
+func startError() -> String? {
+    (try? String(contentsOf: startErrorURL, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
 func backendReady() -> Bool {
     var req = URLRequest(url: readyURL); req.timeoutInterval = 2
     let sem = DispatchSemaphore(value: 0); var ok = false
@@ -154,6 +160,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let ucc = WKUserContentController()
         ucc.add(self, name: "penpotApp")
         ucc.addUserScript(WKUserScript(source: diagnosticsJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        // "Başka uygulamada aç" (Figma / Illustrator) kartları ve köprüsü: aktar.js + Aktar.swift
+        if let aktar = aktarUserScript() {
+            ucc.addUserScript(aktar)
+            ucc.addScriptMessageHandler(aktarHandler, contentWorld: .page, name: "penpotAktar")
+        }
         cfg.userContentController = ucc
 
         webView = WKWebView(frame: .zero, configuration: cfg)
@@ -297,19 +308,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             }
             if !backendReady() {
                 log("Servisler başlatılıyor")
+                try? FileManager.default.removeItem(at: startErrorURL)
                 DispatchQueue.main.async { self.showStatus("Penpot başlatılıyor…") }
                 _ = runScript("start.sh", wait: false)
             }
             // Arayüzü Java sunucusunu beklemeden yükle: sayfa ve 25 MB'lık uygulama kodu sunucu açılırken
             // yüklenir; proxy, API isteklerini sunucu hazır olana kadar kendisi bekletir.
             var w = 0
-            while !frontendReady() && w < 240 { usleep(100_000); w += 1 }   // 24 sn sınır
+            while !frontendReady() && w < 240 && startError() == nil { usleep(100_000); w += 1 }   // 24 sn sınır
+            if let err = startError() {
+                log("Başlatılamadı: \(err)")
+                DispatchQueue.main.async { self.webView.isHidden = true; self.showStatus("Penpot başlatılamadı.\n\n" + err, spinning: false) }
+                return
+            }
             DispatchQueue.main.async {
                 log("Arayüz yükleniyor (sunucu hazır: \(backendReady() ? "evet" : "hayır"))")
                 self.webView.load(URLRequest(url: penpotURL))
             }
             var waited = 0
-            while !backendReady() && waited < 720 { usleep(250_000); waited += 1 }   // 180 sn sınır
+            while !backendReady() && waited < 720 && startError() == nil { usleep(250_000); waited += 1 }   // 180 sn sınır
+            if let err = startError() {
+                log("Başlatılamadı: \(err)")
+                DispatchQueue.main.async { self.webView.isHidden = true; self.showStatus("Penpot başlatılamadı.\n\n" + err, spinning: false) }
+                return
+            }
             if backendReady() {
                 log("Servisler hazır")
                 // Güvenlik: Penpot başlığı değiştirmezse de (beklenmedik bir sayfa) birkaç sn sonra göster

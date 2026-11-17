@@ -9,9 +9,10 @@ APP="$TMP/Penpot.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Birden fazla Swift dosyasında giriş noktası main.swift adlı dosya olmalı
 cp "$HERE/PenpotApp.swift" "$TMP/main.swift"
-swiftc -O -target arm64-apple-macos13.0 -framework AppKit -framework WebKit \
-  "$TMP/main.swift" "$HERE/Guncelleme.swift" -o "$APP/Contents/MacOS/Penpot"
+swiftc -O -target arm64-apple-macos13.0 -framework AppKit -framework WebKit -framework PDFKit \
+  "$TMP/main.swift" "$HERE/Guncelleme.swift" "$HERE/Aktar.swift" -o "$APP/Contents/MacOS/Penpot"
 cp "$ICON" "$APP/Contents/Resources/Penpot.icns"
+cp "$HERE/aktar.js" "$APP/Contents/Resources/aktar.js"   # Figma/Illustrator kartları (Aktar.swift)
 # Tek parça (DMG) sürümü ayrı bir kimlik kullanır: PENPOT_BUNDLE_ID, PENPOT_APP_VERSION
 BUNDLE_ID="${PENPOT_BUNDLE_ID:-local.penpot.desktop}"; APP_VERSION="${PENPOT_APP_VERSION:-1.0}"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
