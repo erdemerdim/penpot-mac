@@ -58,20 +58,24 @@ if ! pgrep -f "java .*$LRE/patches/macos-tmp\\.clj.*app\\.main" >/dev/null; then
   # önbellek kaydedilir ve Penpot kapanırken yazılır. Önbellek sınıf yoluna bağlı olduğu için iki ayrı dosya.
   AOT="$L/data/penpot-$MODE.aot"
   if [ -f "$AOT" ] && [ "$AOT" -nt penpot.jar ] && [ "$AOT" -nt "$JAVA_HOME/bin/java" ] && { [ $MODE = src ] || [ "$AOT" -nt "$CLASSES" ]; }; then
-    AOT_OPT="-XX:AOTCache=$AOT"
+    AOT_OPT=("-XX:AOTCache=$AOT")
   else
     rm -f "$AOT" "$AOT.config"
-    AOT_OPT="-XX:AOTCacheOutput=$AOT"
+    AOT_OPT=("-XX:AOTCacheOutput=$AOT")
   fi
-  nohup "$JAVA_HOME/bin/java" $AOT_OPT $JAVA_OPTS "${RUN[@]}" -i "$L/patches/macos-tmp.clj" -m app.main \
+  nohup "$JAVA_HOME/bin/java" "${AOT_OPT[@]}" $JAVA_OPTS "${RUN[@]}" -i "$L/patches/macos-tmp.clj" -m app.main \
     </dev/null >"$L/logs/backend.log" 2>&1 &
   echo $! >"$L/data/backend.pid"
   cd "$L"
 fi
 
 # Frontend ayarları
-sed -i '' -e "s|^/*var penpotFlags = .*;|var penpotFlags = \"$PENPOT_FLAGS\";|" "$L/frontend/js/config.js"
-grep -q "penpotPublicURI" "$L/frontend/js/config.js" || echo "var penpotPublicURI = \"$PENPOT_PUBLIC_URI\";" >> "$L/frontend/js/config.js"
+# (Yalnızca gerekirse yazılır: tek parça uygulamada bu dosya paketin içindedir ve değiştirilmemelidir)
+CFG="$L/frontend/js/config.js"
+if ! grep -qxF "var penpotFlags = \"$PENPOT_FLAGS\";" "$CFG" || ! grep -q "penpotPublicURI" "$CFG"; then
+  sed -i '' -e "s|^/*var penpotFlags = .*;|var penpotFlags = \"$PENPOT_FLAGS\";|" "$CFG"
+  grep -q "penpotPublicURI" "$CFG" || echo "var penpotPublicURI = \"$PENPOT_PUBLIC_URI\";" >> "$CFG"
+fi
 
 if ! pgrep -f "node $LRE/proxy\\.mjs" >/dev/null; then
   nohup node "$L/proxy.mjs" </dev/null >"$L/logs/frontend.log" 2>&1 &

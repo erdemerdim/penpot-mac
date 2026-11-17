@@ -10,6 +10,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 swiftc -O -target arm64-apple-macos13.0 -framework AppKit -framework WebKit \
   "$HERE/PenpotApp.swift" -o "$APP/Contents/MacOS/Penpot"
 cp "$ICON" "$APP/Contents/Resources/Penpot.icns"
+# Tek parça (DMG) sürümü ayrı bir kimlik kullanır: PENPOT_BUNDLE_ID, PENPOT_APP_VERSION
+BUNDLE_ID="${PENPOT_BUNDLE_ID:-local.penpot.desktop}"; APP_VERSION="${PENPOT_APP_VERSION:-1.0}"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -17,11 +19,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <dict>
   <key>CFBundleName</key><string>Penpot</string>
   <key>CFBundleDisplayName</key><string>Penpot</string>
-  <key>CFBundleIdentifier</key><string>local.penpot.desktop</string>
+  <key>CFBundleIdentifier</key><string>__BUNDLE_ID__</string>
   <key>CFBundleExecutable</key><string>Penpot</string>
   <key>CFBundleIconFile</key><string>Penpot</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>CFBundleShortVersionString</key><string>__VERSION__</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>NSHighResolutionCapable</key><true/>
@@ -33,6 +35,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+sed -i '' -e "s/__BUNDLE_ID__/$BUNDLE_ID/" -e "s/__VERSION__/$APP_VERSION/" "$APP/Contents/Info.plist"
 codesign -f -s - "$APP" >/dev/null 2>&1
 rm -rf "$OUT"; mv "$APP" "$OUT"; touch "$OUT"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$OUT"

@@ -32,3 +32,6 @@
 /Sistem/penpot.env
 
 .DS_Store
+
+# DMG çıktıları (Sistem/tools/app/dmg-olustur.sh)
+/dist/

@@ -6,7 +6,8 @@ import fs from "node:fs";
 import path from "node:path";
 import net from "node:net";
 
-const ROOT = path.dirname(new URL(import.meta.url).pathname);
+// PP_HOME: penpot.env'in bulunduğu klasör (tek parça uygulamada veri klasörü; bu dosya ise paketin içinde)
+const ROOT = process.env.PP_HOME || path.dirname(new URL(import.meta.url).pathname);
 const APP_DIR = path.join(ROOT, "frontend");
 const ASSETS_DIR = path.join(ROOT, "data", "assets");
 const PORT = Number(process.env.PENPOT_PORT || 9001);

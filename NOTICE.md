@@ -6,11 +6,14 @@ ile lisanslıdır.
 Bu proje Penpot'un resmî bir dağıtımı değildir ve Penpot / Kaleidos ile bağlantısı yoktur.
 "Penpot" adı ve logosu sahiplerine aittir.
 
+**DMG sürümü** (GitHub Releases) aşağıdaki bileşenleri değiştirmeden, uygulama paketinin içinde
+(`Penpot.app/Contents/Resources/runtime/`) taşır; lisans metinleri aynı klasörlerdedir.
+
 Depo yalnızca kaynak dosyalarımızı içerir. Aşağıdaki bileşenler `kurulum.sh` tarafından her
 Mac'te doğrudan kaynağından indirilir ya da derlenir ve kendi lisanslarıyla gelir. Lisans
 metinleri kurulumdan sonra belirtilen klasörlerde bulunur.
 
-| Bileşen | Kaynak | Lisans | Kurulumdan sonra lisans metni |
+| Bileşen | Kaynak | Lisans | Lisans metni (kurulumda `Sistem/`, DMG'de `runtime/` altında) |
 |---|---|---|---|
 | Penpot (backend, frontend, exporter, MCP) | [penpot/penpot](https://github.com/penpot/penpot), resmî Docker imajları `penpotapp/*` | MPL-2.0 | `Sistem/backend/LICENSE`, `Sistem/mcp/LICENSE` |
 | Java (Azul Zulu OpenJDK 25) | [azul.com](https://www.azul.com/downloads/) | GPLv2 + Classpath Exception | `Sistem/jdk/Contents/Home/legal/`, `.../LICENSE` |

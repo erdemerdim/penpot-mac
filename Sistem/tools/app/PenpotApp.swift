@@ -9,9 +9,16 @@ let readyURL = URL(string: "http://127.0.0.1:6060/readyz")!
 // Penpot index.html sayfasının ilk başlığı; arayüz çizilince değişir
 let initialPageTitle = "Penpot | Full-stack design"
 
-// Uygulama paketinin yanındaki "Sistem" klasörü
+// İki çalışma şekli:
+//  - Kurulum klasörü (kurulum.sh): uygulamanın yanındaki "Sistem" klasörü kullanılır.
+//  - Tek parça uygulama (DMG): bileşenler paketin içindedir (Contents/Resources/runtime);
+//    veriler ~/Library/Application Support/Penpot/Sistem altında tutulur (runtime/hazirla.sh kurar).
 let appFolder = Bundle.main.bundleURL.deletingLastPathComponent()
-let systemFolder = appFolder.appendingPathComponent("Sistem")
+let bundledRuntime = Bundle.main.resourceURL!.appendingPathComponent("runtime")
+let isStandalone = FileManager.default.fileExists(atPath: bundledRuntime.appendingPathComponent("start.sh").path)
+let systemFolder = isStandalone
+    ? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Penpot/Sistem")
+    : appFolder.appendingPathComponent("Sistem")
 let logURL = systemFolder.appendingPathComponent("logs/app.log")
 
 func log(_ msg: String) {
@@ -23,10 +30,10 @@ func log(_ msg: String) {
     }
 }
 
-func runScript(_ name: String, wait: Bool) -> Int32 {
+func runScript(_ name: String, wait: Bool, in folder: URL = systemFolder) -> Int32 {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/bin/bash")
-    p.arguments = [systemFolder.appendingPathComponent(name).path]
+    p.arguments = [folder.appendingPathComponent(name).path]
     p.standardOutput = FileHandle.nullDevice
     p.standardError = FileHandle.nullDevice
     do { try p.run() } catch { log("\(name) çalıştırılamadı: \(error)"); return -1 }
@@ -233,9 +240,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         if spinning { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
     }
 
+    // MARK: Tek parça uygulama: ilk hazırlık
+    // Paket DMG'den kopyalanmadan açıldıysa (salt okunur disk görüntüsü ya da macOS'un geçici
+    // "App Translocation" konumu) çalışamaz: kullanıcıdan Uygulamalar klasörüne taşımasını iste.
+    func standaloneLocationOK() -> Bool {
+        let path = Bundle.main.bundlePath
+        return !(path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/"))
+    }
+
+    // İnternetten indirilen dosyalardaki "karantina" işareti, paketin içindeki programların (Java,
+    // PostgreSQL…) çalışmasını engeller. Kullanıcı uygulamayı açmayı onayladığı için işaret kaldırılır.
+    func prepareStandalone() -> Bool {
+        let probe = bundledRuntime.appendingPathComponent("start.sh").path
+        if getxattr(probe, "com.apple.quarantine", nil, 0, 0, 0) >= 0 {
+            log("Karantina işareti kaldırılıyor")
+            DispatchQueue.main.async { self.showStatus("İlk açılış hazırlanıyor…") }
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+            p.arguments = ["-dr", "com.apple.quarantine", Bundle.main.bundlePath]
+            p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice
+            try? p.run(); p.waitUntilExit()
+        }
+        let code = runScript("hazirla.sh", wait: true, in: bundledRuntime)
+        log("hazirla.sh bitti, kod \(code)")
+        return code == 0
+    }
+
     // MARK: Servisleri başlat
     func startServicesThenLoad() {
+        if isStandalone && !standaloneLocationOK() {
+            showStatus("Penpot'u önce Uygulamalar klasörüne sürükleyin,\nsonra oradan açın.", spinning: false)
+            let a = NSAlert()
+            a.messageText = "Penpot'u Uygulamalar klasörüne taşıyın"
+            a.informativeText = "Penpot disk görüntüsünün (DMG) içinden ya da İndirilenler klasöründen çalışamaz. Penpot simgesini Uygulamalar klasörüne sürükleyin ve oradan açın."
+            a.addButton(withTitle: "Tamam")
+            a.runModal()
+            NSApp.terminate(nil)
+            return
+        }
         DispatchQueue.global().async {
+            if isStandalone && !self.prepareStandalone() {
+                DispatchQueue.main.async {
+                    self.showStatus("Penpot hazırlanamadı.\nAyrıntılar: \(systemFolder.path)/logs", spinning: false)
+                }
+                return
+            }
             // Önceki oturum hâlâ kapanıyorsa bitmesini bekle (yoksa yeni oturum, kapanan servislere bağlanır)
             if stopInProgress() {
                 log("Önceki oturum kapanıyor, bekleniyor")
@@ -267,7 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 log("Servisler zamanında açılmadı")
                 DispatchQueue.main.async {
                     self.webView.isHidden = true
-                    self.showStatus("Penpot başlatılamadı.\nAyrıntılar: Sistem/logs/backend.log", spinning: false)
+                    self.showStatus("Penpot başlatılamadı.\nAyrıntılar: \(systemFolder.path)/logs/backend.log", spinning: false)
                 }
             }
         }
@@ -404,7 +453,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         // Hemen yeniden açılırsa uygulama, stop.sh'nin kilidi (data/stopping.lock) kalkana kadar bekler.
         log("Uygulama kapanıyor, servisler arka planda durduruluyor")
         window.orderOut(nil)
-        _ = runScript("stop.sh", wait: false)
+        if FileManager.default.fileExists(atPath: systemFolder.appendingPathComponent("stop.sh").path) {
+            _ = runScript("stop.sh", wait: false)
+        }
         return .terminateNow
     }
 
