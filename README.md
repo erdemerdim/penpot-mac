@@ -19,17 +19,32 @@ Penpot'un resmî bir ürünü değildir; Penpot ekibiyle bağlantısı yoktur.
    ```bash
    xcode-select --install
    ```
-3. Depoyu `Belgeler/Penpot` klasörüne indirin. Depo gizli olduğu için GitHub oturumu gerekir;
-   en kolayı GitHub CLI ile (`gh auth login`) ya da GitHub Desktop ile klonlamaktır:
+3. Depo gizli olduğu için önce GitHub oturumu açın. GitHub CLI'ı (`gh`) kurun:
+   ```bash
+   mkdir -p ~/.local/bin && cd /tmp && curl -fsSLO https://github.com/cli/cli/releases/download/v2.104.0/gh_2.104.0_macOS_arm64.zip && unzip -oq gh_2.104.0_macOS_arm64.zip && cp gh_2.104.0_macOS_arm64/bin/gh ~/.local/bin/ && cd ~
+   ```
+   Sonra oturum açın. Çıkan kodu tarayıcıda github.com/login/device adresine girip
+   **Authorize** deyin:
+   ```bash
+   ~/.local/bin/gh auth login --hostname github.com --git-protocol https --web --skip-ssh-key
+   ```
+   ```bash
+   ~/.local/bin/gh auth setup-git
+   ```
+4. Depoyu `Belgeler/Penpot` klasörüne indirin:
    ```bash
    git clone https://github.com/erdemerdim/penpot-mac.git ~/Documents/Penpot
    ```
-4. Kurulumu başlatın (15–25 dk; PostgreSQL ve Valkey bu Mac'te derlenir):
+   Değişiklikleri o Mac'ten de göndermek için bir kez adınızı tanıtın:
+   ```bash
+   cd ~/Documents/Penpot && git config user.name "Erdem Erdim" && git config user.email "65260790+erdemerdim@users.noreply.github.com"
+   ```
+5. Kurulumu başlatın (15–25 dk; PostgreSQL ve Valkey bu Mac'te derlenir):
    ```bash
    ~/Documents/Penpot/kurulum.sh
    ```
-5. Finder'da `Belgeler/Penpot/Penpot.app`'i çift tıklayın. İsterseniz Dock'a sürükleyin.
-6. Penpot ekranında **Hesap oluştur** ile bir hesap açın. Hesaplar her Mac'e özeldir.
+6. Finder'da `Belgeler/Penpot/Penpot.app`'i çift tıklayın. İsterseniz Dock'a sürükleyin.
+7. Penpot ekranında **Hesap oluştur** ile bir hesap açın. Hesaplar her Mac'e özeldir.
 
 Kurulum betiği gizli değerleri (`PENPOT_SECRET_KEY`, veritabanı şifresi) bu Mac için yeniden
 üretir ve `Sistem/penpot.env` dosyasına yazar. Bu dosya depoya gönderilmez.
