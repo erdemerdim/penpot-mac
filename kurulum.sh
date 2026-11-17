@@ -42,6 +42,8 @@ stamp_ok() { [ -f "$L/$1/.kurulum-surumu" ] && [ "$(cat "$L/$1/.kurulum-surumu")
 stamp()    { echo "$2" > "$L/$1/.kurulum-surumu"; }
 
 mkdir -p "$L/data" "$L/logs" "$L/bin"
+# ZIP olarak indirildiyse çalıştırma izinleri kaybolmuş olabilir
+chmod +x "$L/bin/convert" "$L"/*.sh "$L"/tools/*.sh "$L"/tools/app/*.sh "$ROOT"/*.sh
 
 # ---------------------------------------------------------------- Java
 if ! stamp_ok jdk "$JDK_URL"; then
@@ -149,7 +151,6 @@ for t in magick pdfunite; do
     swiftc -O "$L/tools/$t.swift" -o "$L/bin/$t"
   fi
 done
-chmod +x "$L/bin/convert" "$L"/*.sh "$L"/tools/*.sh "$L"/tools/app/*.sh "$ROOT"/*.sh
 
 # ---------------------------------------------------------------- ayarlar ve gizli değerler
 if [ ! -f "$L/penpot.env" ]; then
