@@ -7,8 +7,10 @@ ICON="${2:?ikon dosyası gerekli}"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 APP="$TMP/Penpot.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+# Birden fazla Swift dosyasında giriş noktası main.swift adlı dosya olmalı
+cp "$HERE/PenpotApp.swift" "$TMP/main.swift"
 swiftc -O -target arm64-apple-macos13.0 -framework AppKit -framework WebKit \
-  "$HERE/PenpotApp.swift" -o "$APP/Contents/MacOS/Penpot"
+  "$TMP/main.swift" "$HERE/Guncelleme.swift" -o "$APP/Contents/MacOS/Penpot"
 cp "$ICON" "$APP/Contents/Resources/Penpot.icns"
 # Tek parça (DMG) sürümü ayrı bir kimlik kullanır: PENPOT_BUNDLE_ID, PENPOT_APP_VERSION
 BUNDLE_ID="${PENPOT_BUNDLE_ID:-local.penpot.desktop}"; APP_VERSION="${PENPOT_APP_VERSION:-1.0}"
@@ -36,6 +38,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 sed -i '' -e "s/__BUNDLE_ID__/$BUNDLE_ID/" -e "s/__VERSION__/$APP_VERSION/" "$APP/Contents/Info.plist"
+# DMG sürümü: içindeki Penpot sürümü ve güncelleme denetiminin soracağı GitHub deposu (Guncelleme.swift)
+PB=/usr/libexec/PlistBuddy
+[ -n "${PENPOT_VERSION_INFO:-}" ] && $PB -c "Add :PenpotVersion string $PENPOT_VERSION_INFO" "$APP/Contents/Info.plist"
+[ -n "${PENPOT_UPDATE_REPO:-}" ] && $PB -c "Add :PenpotUpdateRepo string $PENPOT_UPDATE_REPO" "$APP/Contents/Info.plist"
 codesign -f -s - "$APP" >/dev/null 2>&1
 rm -rf "$OUT"; mv "$APP" "$OUT"; touch "$OUT"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$OUT"

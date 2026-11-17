@@ -129,6 +129,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         buildMenu()
         buildWindow()
         startServicesThenLoad()
+        // Güncelleme denetimi açılışı yavaşlatmasın: pencere açıldıktan sonra, arka planda
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { updateChecker.checkOnLaunch() }
     }
 
     // MARK: Pencere ve web görünümü
@@ -465,7 +467,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         let appItem = NSMenuItem(); main.addItem(appItem)
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "Penpot Hakkında", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "Penpot Hakkında", action: #selector(showAbout), keyEquivalent: "").target = self
+        let ver = appMenu.addItem(withTitle: versionLine, action: nil, keyEquivalent: "")
+        ver.isEnabled = false
+        if updateChecker.enabled {
+            appMenu.addItem(withTitle: "Güncellemeleri Denetle…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
+        }
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Penpot'u Gizle", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let hideOthers = appMenu.addItem(withTitle: "Diğerlerini Gizle", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
@@ -503,6 +510,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         NSApp.mainMenu = main
     }
+
+    @objc func showAbout() {
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationVersion: versionLine, .version: "",
+            .credits: NSAttributedString(string: "Penpot (MPL-2.0) — resmî olmayan Mac paketi.\nTasarımlarınız bu Mac'te tutulur.",
+                                         attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]),
+        ])
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    @objc func checkForUpdates() { updateChecker.checkManually() }
 
     @objc func reloadPage() { webView.reload() }
     @objc func goHome() { webView.load(URLRequest(url: penpotURL)) }

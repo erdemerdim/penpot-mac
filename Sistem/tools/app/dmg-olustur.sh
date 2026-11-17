@@ -3,7 +3,8 @@
 # Bileşenler bu kurulumun Sistem klasöründen alınır (önce kurulum.sh çalışmış olmalı);
 # kişisel veriler (Sistem/data, logs, penpot.env…) pakete GİRMEZ.
 #
-#   Sistem/tools/app/dmg-olustur.sh            -> dist/Penpot-<sürüm>.dmg
+#   Sistem/tools/app/dmg-olustur.sh            -> dist/Penpot-<APP_VERSION>.dmg
+# Sürüm: Sistem/surumler.env içindeki APP_VERSION (Release etiketi v<APP_VERSION>).
 #
 # Uygulama açılınca verilerini ~/Library/Application Support/Penpot altında tutar (hazirla.sh).
 set -euo pipefail
@@ -12,7 +13,6 @@ L="$(cd "$HERE/../.." && pwd)"          # Sistem
 ROOT="$(cd "$L/.." && pwd)"
 source "$L/surumler.env"
 PV="$(cat "$L/backend/version.txt")"
-APP_VERSION="$PV"
 OUTDIR="$ROOT/dist"; DMG="$OUTDIR/Penpot-$APP_VERSION.dmg"
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 say() { printf '\n==> %s\n' "$*"; }
@@ -32,6 +32,7 @@ fi
 
 say "Penpot.app derleniyor"
 PENPOT_BUNDLE_ID="io.github.erdemerdim.penpot-mac" PENPOT_APP_VERSION="$APP_VERSION" \
+  PENPOT_VERSION_INFO="$PV" PENPOT_UPDATE_REPO="$UPDATE_REPO" \
   bash "$HERE/build.sh" "$WORK/Penpot.app" "$HERE/Penpot.icns" >/dev/null 2>&1
 RT="$WORK/Penpot.app/Contents/Resources/runtime"
 mkdir -p "$RT/bin" "$RT/tools" "$RT/seed"
