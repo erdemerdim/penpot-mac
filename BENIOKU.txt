@@ -1,0 +1,22 @@
+PENPOT (bilgisayarınızda, Docker'sız)
+
+  Penpot.app            -> Penpot'u kendi penceresinde açar. Pencereyi kapatınca ya da Cmd+Q ile
+                           çıkınca Penpot servisleri de kapanır.
+  Penpot Güncelle.app   -> GitHub deposundaki değişiklikleri alır, sonra yeni Penpot sürümü
+                           var mı bakar; onaylarsanız kurar.
+  kurulum.sh            -> Yeni bir Mac'e kurulum (ayrıntılar README.md'de)
+  gonder.sh             -> Bu Mac'te yapılan değişiklikleri GitHub'a gönderir
+  Sistem                -> Penpot'un çalışan dosyaları ve TASARIMLARINIZ (Sistem/data). Silmeyin.
+
+Terminal'den durdurmak için:  ~/Documents/Penpot/Sistem/stop.sh
+Kayıtlar: Sistem/logs/app.log (uygulama), Sistem/logs/stop.log (kapanış adımları).
+Güncelleme sonrası sorun olursa eski sürüme dönmek için:  ~/Documents/Penpot/Sistem/rollback.sh
+
+Notlar:
+- Tasarımlarınız GitHub'a gönderilmez. Başka Mac'e taşımak için Penpot'ta Dışa aktar ->
+  Penpot dosyası (.penpot), diğer Mac'te İçe aktar (README.md'de anlatılıyor).
+- Tasarımlarınız Sistem/data, güncelleme yedekleri Sistem/backups klasöründedir.
+- Dışa aktarma (PNG, JPG, WEBP, SVG, PDF) çalışır.
+- E-posta gönderimi ve kendi yazı tipi dosyanızı yükleme bu kurulumda yoktur.
+- Sistem/penpot.env gizli anahtar içerir, paylaşmayın (depoya da gönderilmez).
+- Uygulama her yeniden derlendiğinde macOS, Belgeler klasörü iznini bir kez daha sorabilir.

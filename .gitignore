@@ -1,0 +1,34 @@
+# Yalnızca bizim yazdığımız dosyalar depoya girer. Aşağıdakiler her Mac'te
+# kurulum.sh ile indirilir/derlenir ya da o Mac'e özeldir.
+
+# Derlenen uygulamalar (kurulum.sh / Sistem/tools/app/build-all.sh üretir)
+/Penpot.app/
+/Penpot Güncelle.app/
+
+# Penpot kaynak kodu (yalnızca inceleme için indirilmişti; uygulama kullanmaz)
+/Kaynak Kod/
+
+# İndirilen / derlenen bileşenler
+/Sistem/jdk/
+/Sistem/node/
+/Sistem/pgsql/
+/Sistem/valkey/
+/Sistem/backend/
+/Sistem/frontend/
+/Sistem/exporter/
+/Sistem/browsers/
+/Sistem/mcp/
+/Sistem/*.old/
+/Sistem/bin/magick
+/Sistem/bin/pdfunite
+
+# Kişisel ve üretilen veriler: tasarımlar, veritabanı, önbellekler, kayıtlar, yedekler
+/Sistem/data/
+/Sistem/logs/
+/Sistem/backups/
+/Sistem/chrome-profile/
+
+# Gizli değerler (şablonu: Sistem/penpot.env.example)
+/Sistem/penpot.env
+
+.DS_Store

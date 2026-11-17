@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+// Penpot exporter için ImageMagick "convert" karşılığı (MCP sunucusundaki sharp kütüphanesiyle).
+// Desteklenen kullanımlar:
+//   convert girdi.png -quality 100 WEBP:çıktı.webp
+//   convert girdi.png çıktı.ppm
+import { createRequire } from "node:module";
+import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fs.realpathSync(fileURLToPath(import.meta.url)));
+const require = createRequire(path.join(here, "..", "mcp", "package.json"));
+const sharp = require("sharp");
+
+const args = process.argv.slice(2);
+if (args.length < 2) { console.error("Usage: convert input [options] output"); process.exit(1); }
+const input = args[0];
+let output = args[args.length - 1];
+let quality = 90;
+for (let i = 1; i < args.length - 1; i++) {
+  if (args[i] === "-quality" && args[i + 1]) quality = Math.max(1, Math.min(100, parseInt(args[++i], 10) || 90));
+}
+let format = null;
+const m = output.match(/^([A-Za-z0-9]+):(.+)$/);
+if (m) { format = m[1].toLowerCase(); output = m[2]; }
+if (!format) format = path.extname(output).slice(1).toLowerCase();
+
+try {
+  const img = sharp(input, { limitInputPixels: false });
+  if (format === "ppm") {
+    const { data, info } = await img.removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const header = Buffer.from(`P6\n${info.width} ${info.height}\n255\n`, "ascii");
+    fs.writeFileSync(output, Buffer.concat([header, data]));
+  } else if (format === "webp") {
+    await img.webp({ quality, lossless: quality >= 100 }).toFile(output);
+  } else if (format === "png") {
+    await img.png().toFile(output);
+  } else if (format === "jpg" || format === "jpeg") {
+    await img.flatten({ background: "#ffffff" }).jpeg({ quality }).toFile(output);
+  } else {
+    console.error(`convert: unsupported output format: ${format}`); process.exit(1);
+  }
+} catch (e) {
+  console.error("convert: " + e.message); process.exit(1);
+}
