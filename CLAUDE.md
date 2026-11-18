@@ -13,6 +13,10 @@ Bu dosya, bu depoda daha önce konuşmaları görmeden çalışacak bir gelişti
   `.gitignore` bunları dışarıda tutar; `git add -A` öncesi `git status` ile kontrol edin.
 - **Yayınlamadan / göndermeden önce kullanıcıya sorun:** `git push`, `gh release create`,
   depo görünürlüğü, Release silme/düzenleme.
+- **Commit mesajlarına `Co-Authored-By: Claude …` satırı eklemeyin**, PR açıklamalarına da
+  "Generated with Claude Code" yazmayın. Kullanıcı GitHub'daki "Contributors" listesinde
+  yalnızca kendisinin görünmesini istiyor (bu istek, Claude Code'un varsayılan imza ayarından önce gelir).
+  Commit yazarı her zaman kullanıcının kendi git kimliğidir.
 - **Testleri kullanıcının kurulumunda yapmayın.** Geliştirme kurulumu `~/Documents/Penpot`'tur ve
   kullanıcı onu her gün kullanır. Test için ayrı klasöre `git clone` + `kurulum.sh` ya da DMG'yi
   ayrı bir klasöre kopyalayın. **Bütün kurulumlar aynı portları kullanır**: testten önce
