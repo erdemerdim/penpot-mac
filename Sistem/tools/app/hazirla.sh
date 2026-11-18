@@ -26,6 +26,16 @@ if [ ! -f "$S/penpot.env" ]; then
   echo "penpot.env oluşturuldu"
 fi
 
+# Güncelleme: özellik bayraklarını (gizli değil) paketteki şablonla eşitle. Aksi hâlde eski
+# sürümden gelen penpot.env yeni bayrakları almaz ve start.sh paketin içindeki config.js'i
+# yeniden yazıp uygulamanın imzasını bozar.
+YENI="$(grep -m1 '^export PENPOT_FLAGS=' "$RT/penpot.env.example" || true)"
+if [ -n "$YENI" ] && ! grep -qxF "$YENI" "$S/penpot.env"; then
+  awk -v y="$YENI" '/^export PENPOT_FLAGS=/{print y; b=1; next} {print} END{if(!b) print y}' "$S/penpot.env" > "$S/penpot.env.tmp"
+  chmod 600 "$S/penpot.env.tmp"; mv "$S/penpot.env.tmp" "$S/penpot.env"
+  echo "penpot.env bayrakları güncellendi"
+fi
+
 # Hızlı açılış: önceden derlenmiş Penpot kodu pakette hazır gelir (tools/aot-compile.sh çıktısı)
 STAMP="$(stat -L -f "%z-%m" "$RT/backend/penpot.jar")"
 if [ -f "$RT/seed/penpot-classes.jar" ] && [ "$(cat "$S/data/penpot-classes.stamp" 2>/dev/null)" != "$STAMP" ]; then

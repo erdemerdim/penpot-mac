@@ -159,6 +159,16 @@ if [ ! -f "$L/penpot.env" ]; then
   sed -e "s/__SECRET_KEY__/$SECRET/" -e "s/__DB_PASSWORD__/$DBPW/" "$L/penpot.env.example" > "$L/penpot.env"
   chmod 600 "$L/penpot.env"
 fi
+# Güncelleme: şablondaki yeni özellik bayraklarını mevcut penpot.env'e ekle (eldeki bayraklara dokunmaz)
+ESKI="$(sed -n 's/^export PENPOT_FLAGS="\(.*\)"$/\1/p' "$L/penpot.env" | head -1)"
+EK=""
+for f in $(sed -n 's/^export PENPOT_FLAGS="\(.*\)"$/\1/p' "$L/penpot.env.example" | head -1); do
+  case " $ESKI " in *" $f "*) ;; *) EK="$EK $f" ;; esac
+done
+if [ -n "$EK" ] && [ -n "$ESKI" ]; then
+  sed -i '' "s|^export PENPOT_FLAGS=\".*\"$|export PENPOT_FLAGS=\"$ESKI$EK\"|" "$L/penpot.env"
+  say "penpot.env'e yeni bayraklar eklendi:$EK"
+fi
 
 # ---------------------------------------------------------------- hızlı açılış derlemesi
 if [ ! -f "$L/data/penpot-classes.jar" ] || [ "$(cat "$L/data/penpot-classes.stamp" 2>/dev/null)" != "$(stat -f "%z-%m" "$L/backend/penpot.jar")" ]; then
