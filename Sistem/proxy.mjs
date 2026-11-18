@@ -15,6 +15,9 @@ const BACKEND = new URL(process.env.PENPOT_BACKEND_URI || "http://127.0.0.1:6060
 const EXPORTER = new URL("http://127.0.0.1:6061");
 const MCP_HTTP = new URL("http://127.0.0.1:4401");
 const MCP_WS = new URL("http://127.0.0.1:4402");
+// Bu dosyanın yanındaki patches/ (geliştirme kurulumu ve DMG paketi); yoksa veri klasöründeki
+const CODE_DIR = path.dirname(new URL(import.meta.url).pathname);
+const AKICI_ZOOM = [path.join(CODE_DIR, "patches", "akici-zoom.js"), path.join(ROOT, "patches", "akici-zoom.js")].find(f => fs.existsSync(f)) || "";
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -126,6 +129,13 @@ const server = http.createServer((req, res) => {
   const qs = url.search;
   if (p.startsWith("/mcp") || p.startsWith("/plugins/mcp")) console.log(new Date().toISOString(), req.method, p);
 
+  // Akıcı yakınlaştırma betiği (patches/akici-zoom.js): Penpot sayfasına eklenir
+  if (p === "/__akici-zoom.js" && AKICI_ZOOM) return sendFile(res, AKICI_ZOOM, { "cache-control": "no-store" });
+  if (p === "/" || p === "/index.html") {
+    const tags = AKICI_ZOOM ? '<script src="/__akici-zoom.js"></script>' : "";
+    const html = fs.readFileSync(path.join(APP_DIR, "index.html"), "utf8").replace("</head>", tags + "</head>");
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store, no-cache, max-age=0" }); return res.end(html);
+  }
   if (p.startsWith("/mcp/stream")) return proxyTo(MCP_HTTP, req, res, "/mcp" + qs);
   if (p.startsWith("/api/export")) return proxyTo(EXPORTER, req, res, req.url);
   if (p.startsWith("/api") || p.startsWith("/assets") || p === "/link-preview" || p === "/readyz") {

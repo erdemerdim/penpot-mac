@@ -122,6 +122,7 @@
     return svg.replace(re, (m, attr, url) => `${attr}="${data[url] || url}"`);
   };
   const native = (msg) => window.webkit.messageHandlers.penpotAktar.postMessage(msg);
+  const log = (m) => { try { window.webkit.messageHandlers.penpotApp.postMessage({ kind: "aktar", msg: String(m) }); } catch (e) {} };
   const currentTeamId = () => (location.hash.match(/team-id=([0-9a-f-]{36})/) || [])[1];
   const fmtDate = (s) => { try { return new Date(s).toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" }); } catch (e) { return ""; } };
 
@@ -226,9 +227,30 @@
     return { clips, whites };
   }
 
-  // Yazı konumlarını sayfada ölçer: ideographic ile alphabetic taban çizgisi arasındaki fark kadar
-  // y kaydırılır. Ölçüm için yazı, aynı stil ile gizli bir SVG'de iki kez çizilir.
-  function fixTexts(doc) {
+  // Penpot dosyasındaki yazı içeriğinden (content) gerçek yazı tiplerini çıkarır.
+  // SVG'deki font-family, yazının son ölçüm verisinden gelir ve çoğu zaman "sans-serif, sourcesanspro"
+  // olarak kalmıştır; asıl tasarım yazı tipi içerik ağacındaki yapraklardadır.
+  function textLeaves(node, out = []) {
+    if (!node || typeof node !== "object") return out;
+    if (typeof node.text === "string" && !Array.isArray(node.children)) {
+      out.push({ text: node.text, family: node.fontFamily, weight: node.fontWeight, style: node.fontStyle, fontId: node.fontId });
+    }
+    for (const c of node.children || []) textLeaves(c, out);
+    return out;
+  }
+  const fontName = (f) => (!f || f.toLowerCase() === "sourcesanspro" ? "Source Sans Pro" : f);
+  const leafFor = (shape, runText) => {
+    const leaves = (shape && shape.leaves || []).filter((l) => l.family);
+    if (!leaves.length) return null;
+    const run = (runText || "").trim();
+    return leaves.find((l) => run && l.text.includes(run)) || leaves.find((l) => run && run.includes(l.text.trim()) && l.text.trim()) || leaves[0];
+  };
+  const GENERIC = ["sans-serif", "serif", "monospace", "cursive", "fantasy", "system-ui"];
+
+  // Yazıları düzeltir: gerçek yazı tipi/kalınlık/stil yazılır, textLength kaldırılır ve
+  // dominant-baseline="ideographic" yerine normal (alfabetik) taban çizgisine göre y yazılır.
+  // Konum farkı, yazı tipi yüklenmiş olarak bu sayfada ölçülür.
+  function fixTexts(doc, shapes) {
     const texts = Array.from(doc.getElementsByTagNameNS(SVGNS, "text"));
     if (!texts.length) return 0;
     const host = document.createElementNS(SVGNS, "svg");
@@ -239,14 +261,24 @@
     try {
       for (const t of texts) {
         let style = t.getAttribute("style") || "";
-        // Yazı tipi listesi: genel adları sona al, Penpot'un iç adını gerçek ada çevir
-        style = style.replace(/font-family:\s*([^;]+)/, (m, list) => {
-          const fams = list.split(",").map((f) => f.trim().replace(/^["']|["']$/g, "")).filter(Boolean)
-            .map((f) => (f.toLowerCase() === "sourcesanspro" ? "Source Sans Pro" : f));
-          const generic = ["sans-serif", "serif", "monospace", "cursive", "fantasy", "system-ui"];
-          const sorted = [...fams.filter((f) => !generic.includes(f.toLowerCase())), ...fams.filter((f) => generic.includes(f.toLowerCase()))];
-          return "font-family: " + sorted.map((f) => (/\s/.test(f) ? `'${f}'` : f)).join(", ");
-        });
+        const owner = t.closest("[id^='shape-']");
+        const sid = owner && (owner.getAttribute("id").match(/^shape-([0-9a-f-]{36})$/) || [])[1];
+        const leaf = leafFor(sid && shapes[sid], t.textContent);
+        const set = (prop, val) => {
+          const re = new RegExp(`(^|;)\\s*${prop}\\s*:[^;]*`);
+          style = re.test(style) ? style.replace(re, `$1 ${prop}: ${val}`) : `${style.replace(/;?\s*$/, ";")} ${prop}: ${val};`;
+        };
+        if (leaf) {
+          set("font-family", `'${fontName(leaf.family)}', sans-serif`);
+          if (leaf.weight) set("font-weight", leaf.weight);
+          if (leaf.style) set("font-style", leaf.style);
+        } else {
+          style = style.replace(/font-family:\s*([^;]+)/, (m, list) => {
+            const fams = list.split(",").map((f) => f.trim().replace(/^["']|["']$/g, "")).filter(Boolean).map(fontName);
+            const sorted = [...fams.filter((f) => !GENERIC.includes(f.toLowerCase())), ...fams.filter((f) => GENERIC.includes(f.toLowerCase()))];
+            return "font-family: " + sorted.map((f) => (GENERIC.includes(f.toLowerCase()) ? f : `'${f}'`)).join(", ");
+          });
+        }
         t.setAttribute("style", style);
         t.removeAttribute("textLength"); t.removeAttribute("lengthAdjust");
         const db = t.getAttribute("dominant-baseline");
@@ -272,6 +304,140 @@
       }
     } finally { host.remove(); }
     return fixed;
+  }
+
+  // Tasarımda kullanılan Google yazı tiplerini sayfaya yükler (ölçüm ve görüntüye çevirme doğru olsun)
+  async function loadFonts(families) {
+    for (const f of families) {
+      if (document.querySelector(`style[data-ppx-font="${f}"]`)) continue;
+      try {
+        const r = await fetch(`/internal/gfonts/css?family=${encodeURIComponent(f)}:100,200,300,400,500,600,700,800,900,100italic,400italic,700italic&display=block`);
+        if (!r.ok) continue;
+        const st = document.createElement("style"); st.dataset.ppxFont = f; st.textContent = await r.text();
+        document.head.appendChild(st);
+        await Promise.all([300, 400, 500, 600, 700, 800].map((w) => document.fonts.load(`${w} 20px '${f}'`).catch(() => null)));
+      } catch (e) { /* yazı tipi yüklenemezse ölçüm yedek yazı tipiyle yapılır */ }
+    }
+  }
+
+  // Penpot'un dış/iç kontur hilesini (maske ya da kırpma içinde iki kat kalın çizgi + <use>) düz bir
+  // kontura çevirir; Figma ve Illustrator bu hileyi anlamıyor, konturu kaymış ya da hiç göstermiyordu.
+  function fixStrokes(doc) {
+    let n = 0;
+    for (const g of Array.from(doc.querySelectorAll("g.outer-stroke-shape, g.inner-stroke-shape"))) {
+      const def = g.querySelector("defs > [id^='stroke-shape-']");
+      if (!def) continue;
+      const outer = g.classList.contains("outer-stroke-shape");
+      const src = outer ? g.querySelector(":scope > use[mask]") : def;
+      const css = (el, prop) => ((el && el.getAttribute("style") || "").match(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`)) || [])[1];
+      const stroke = css(src, "stroke"), width = parseFloat(css(src, "stroke-width") || "0");
+      const out = def.cloneNode(true);
+      out.removeAttribute("id");
+      let st = (out.getAttribute("style") || "").replace(/(^|;)\s*(fill|fill-opacity|stroke|stroke-width|stroke-opacity)\s*:[^;]*/g, "").replace(/^;+/, "");
+      if (stroke && stroke !== "none" && width > 0) {
+        st += `; fill: none; stroke: ${stroke}; stroke-opacity: ${css(src, "stroke-opacity") || 1}; stroke-width: ${width / 2}`;
+      } else st += "; fill: none; stroke: none";
+      out.setAttribute("style", st.replace(/^;\s*/, ""));
+      const tr = g.getAttribute("transform");
+      if (tr && !IDENTITY.test(tr)) { const w = doc.createElementNS(SVGNS, "g"); w.setAttribute("transform", tr); w.appendChild(out); g.replaceWith(w); }
+      else g.replaceWith(out);
+      n++;
+    }
+    return n;
+  }
+
+  // Gölge, parlama ve bulanıklık (SVG filtreleri) Figma'da hiç, Illustrator'da düzgün çıkmıyor.
+  //  - Gölge: yalnızca gölgenin kendisi görüntüye çevrilip öğenin arkasına konur; öğe düzenlenebilir kalır.
+  //  - Bulanıklık ve diğerleri: öğe bütünüyle görüntüye çevrilir.
+  // Ölçüm için belge gizli olarak sayfaya yerleştirilir; görüntüler 2x çözünürlükte çizilir.
+  async function rasterizeEffects(doc, onProgress) {
+    const targets = Array.from(doc.querySelectorAll("[filter]")).filter((e) =>
+      !e.closest("defs,mask,clipPath,pattern,filter,symbol") && !e.parentElement.closest("[filter]"));
+    if (!targets.length) return { shadows: 0, rasters: 0 };
+    targets.forEach((e, i) => e.setAttribute("data-ppx-fx", i));
+    const holder = document.createElement("div");
+    holder.style.cssText = "position:absolute;left:-200000px;top:0;visibility:hidden;pointer-events:none";
+    const live = document.importNode(doc.documentElement, true);
+    holder.appendChild(live); document.body.appendChild(holder);
+    const byId = (root, id) => root.querySelector(`[id="${id.replace(/["\\]/g, "\\$&")}"]`);
+    const refsOf = (el) => {
+      const ids = new Set();
+      for (const e of [el, ...el.querySelectorAll("*")]) for (const a of e.attributes) {
+        for (const m of a.value.matchAll(/url\(['"]?#([^)'"]+)['"]?\)/g)) ids.add(m[1]);
+        if ((a.name === "href" || a.name === "xlink:href") && a.value.startsWith("#")) ids.add(a.value.slice(1));
+      }
+      return ids;
+    };
+    let shadows = 0, rasters = 0;
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        onProgress && onProgress(i + 1, targets.length);
+        const t = targets[i], lt = live.querySelector(`[data-ppx-fx="${i}"]`);
+        const filt = byId(doc, urlId(t.getAttribute("filter")) || "");
+        if (!lt || !filt) continue;
+        const prims = Array.from(filt.children);
+        const last = prims[prims.length - 1];
+        const shadowOnly = !!last && last.localName === "feBlend" && last.getAttribute("in") === "SourceGraphic";
+        // Bölge: öğenin kutusu + filtre bölgesi (objectBoundingBox kesirleri)
+        const bb = lt.getBBox();
+        if (!bb.width || !bb.height) continue;
+        let R = { x: bb.x, y: bb.y, w: bb.width, h: bb.height };
+        if ((filt.getAttribute("filterUnits") || "objectBoundingBox") === "objectBoundingBox") {
+          const fx = parseFloat(filt.getAttribute("x") ?? -0.1), fy = parseFloat(filt.getAttribute("y") ?? -0.1);
+          const fw = parseFloat(filt.getAttribute("width") ?? 1.2), fh = parseFloat(filt.getAttribute("height") ?? 1.2);
+          R = { x: bb.x + fx * bb.width, y: bb.y + fy * bb.height, w: fw * bb.width, h: fh * bb.height };
+        } else if (filt.getAttribute("width")) {
+          R = { x: +filt.getAttribute("x"), y: +filt.getAttribute("y"), w: +filt.getAttribute("width"), h: +filt.getAttribute("height") };
+        }
+        // Çizim belgesi: öğe + başvurduğu tanımlar (filtre, gradyan, kırpma…), öğenin kendi koordinatlarında
+        const rd = document.implementation.createDocument(SVGNS, "svg", null);
+        const root = rd.documentElement;
+        root.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xlink", XLINK);
+        const scale = 2;
+        root.setAttribute("viewBox", `${R.x} ${R.y} ${R.w} ${R.h}`);
+        root.setAttribute("width", Math.ceil(R.w * scale)); root.setAttribute("height", Math.ceil(R.h * scale));
+        const defs = rd.createElementNS(SVGNS, "defs"); root.appendChild(defs);
+        const seen = new Set(), queue = [...refsOf(t)];
+        while (queue.length) {
+          const id = queue.shift(); if (seen.has(id)) continue; seen.add(id);
+          const d = byId(doc, id); if (!d) continue;
+          const c = rd.importNode(d, true);
+          if (id === filt.id && shadowOnly) c.lastElementChild && c.removeChild(c.lastElementChild);   // yalnızca gölge
+          defs.appendChild(c);
+          for (const r of refsOf(d)) queue.push(r);
+        }
+        const tc = rd.importNode(t, true); tc.removeAttribute("transform"); root.appendChild(tc);
+        const png = await new Promise((ok) => {
+          const img = new Image();
+          img.onload = () => {
+            const c = document.createElement("canvas"); c.width = Math.ceil(R.w * scale); c.height = Math.ceil(R.h * scale);
+            c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+            ok(c.toDataURL("image/png")); URL.revokeObjectURL(img.src);
+          };
+          img.onerror = () => ok(null);
+          img.src = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(rd)], { type: "image/svg+xml" }));
+        });
+        if (!png) continue;
+        const im = doc.createElementNS(SVGNS, "image");
+        im.setAttribute("x", R.x); im.setAttribute("y", R.y); im.setAttribute("width", R.w); im.setAttribute("height", R.h);
+        im.setAttribute("href", png); im.setAttribute("preserveAspectRatio", "none");
+        const tr = t.getAttribute("transform");
+        const placed = tr && !IDENTITY.test(tr) ? (() => { const g = doc.createElementNS(SVGNS, "g"); g.setAttribute("transform", tr); g.appendChild(im); return g; })() : im;
+        if (shadowOnly) {
+          im.setAttribute("id", "Gölge");
+          t.parentNode.insertBefore(placed, t);
+          t.removeAttribute("filter");
+          shadows++;
+        } else {
+          t.replaceWith(placed);
+          rasters++;
+        }
+      }
+    } finally {
+      holder.remove();
+      for (const e of doc.querySelectorAll("[data-ppx-fx]")) e.removeAttribute("data-ppx-fx");
+    }
+    return { shadows, rasters };
   }
 
   function simplifyLayers(doc, names) {
@@ -335,17 +501,21 @@
     }
   }
 
-  function prepareSvg(svgText, names = {}) {
+  async function prepareSvg(svgText, shapes = {}, onProgress) {
     const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
     if (doc.querySelector("parsererror")) return { svg: svgText, report: { error: "SVG okunamadı" } };
+    const names = {};
+    for (const [id, sh] of Object.entries(shapes)) if (sh.name) names[id] = sh.name;
     flattenImagePatterns(doc);
     const masks = fixMasks(doc);
-    const texts = fixTexts(doc);
+    const strokes = fixStrokes(doc);
+    const texts = fixTexts(doc, shapes);
+    const effects = await rasterizeEffects(doc, onProgress);
     simplifyLayers(doc, names);
     addXlinkHrefs(doc);
-    return { svg: new XMLSerializer().serializeToString(doc), report: { masks, texts } };
+    return { svg: new XMLSerializer().serializeToString(doc), report: { masks, strokes, texts, effects } };
   }
-  window.__ppxTest = { prepareSvg };   // (yalnızca test için dışa açık)
+  window.__ppxTest = { prepareSvg, loadFonts, textLeaves };   // (yalnızca test için dışa açık)
 
   // Birden fazla board'un SVG'sini, Penpot'taki konumlarını koruyarak tek SVG'de birleştirir
   const mergeSvgs = (parts) => {
@@ -514,7 +684,7 @@
     async function pickBoards(file) {
       sub.textContent = file.name;
       loading("Dosya açılıyor…");
-      let boards; const names = {};
+      let boards; const shapes = {};
       try {
         const full = await rpc("get-file", { id: file.id });
         const data = full.data || {};
@@ -522,7 +692,7 @@
         boards = [];
         for (const { id: pageId, page } of pages) {
           for (const o of Object.values(page.objects || {})) {
-            if (o.id && o.name) names[o.id] = o.name;
+            if (o.id) shapes[o.id] = { name: o.name, type: o.type, leaves: o.type === "text" ? textLeaves(o.content) : null };
             if (o.type === "frame" && o.id !== ROOT_ID && o.parentId === ROOT_ID)
               boards.push({ id: o.id, name: o.name || "Board", pageId, pageName: page.name, x: o.x, y: o.y, width: o.width, height: o.height });
           }
@@ -573,6 +743,17 @@
         go.disabled = all.disabled = back.disabled = true;
         try {
           const profile = await rpc("get-profile");
+          // Tasarımdaki yazı tipleri: sayfaya yükle (doğru ölçüm) ve Mac'te yoksa kur (Figma/Illustrator için)
+          const fams = [...new Set(Object.values(shapes).flatMap((sh) => (sh.leaves || []).map((l) => fontName(l.family))).filter(Boolean))];
+          if (fams.length) {
+            status.replaceChildren(el("span", { class: "ppx-spin" }), "Yazı tipleri hazırlanıyor…");
+            await loadFonts(fams);
+            try {
+              const fr = await native({ kind: "fonts", families: fams });
+              if (fr && fr.installed && fr.installed.length) log("Kurulan yazı tipleri: " + fr.installed.join(", "));
+              if (fr && fr.missing && fr.missing.length) log("Bulunamayan yazı tipleri: " + fr.missing.join(", "));
+            } catch (e) { log("Yazı tipi kurulumu: " + e.message); }
+          }
           const parts = [];
           for (let i = 0; i < chosen.length; i++) {
             if (closed) return;
@@ -581,7 +762,12 @@
             let data = await exportOne(profile.id, file.id, chosen[i].pageId, chosen[i], type);
             if (type === "svg") data = await inlineAssets(data, (k, n) =>
               status.replaceChildren(el("span", { class: "ppx-spin" }), `Görseller ekleniyor ${k}/${n}: ${chosen[i].name}`));
-            if (type === "svg") data = prepareSvg(data, names).svg;
+            if (type === "svg") {
+              const r = await prepareSvg(data, shapes, (k, n) =>
+                status.replaceChildren(el("span", { class: "ppx-spin" }), `Efektler hazırlanıyor ${k}/${n}: ${chosen[i].name}`));
+              data = r.svg;
+              log("Hazırlandı: " + chosen[i].name + " " + JSON.stringify(r.report));
+            }
             parts.push({ board: chosen[i], data });
           }
           const asSvg = target === "figma" || fmt === "svg";
